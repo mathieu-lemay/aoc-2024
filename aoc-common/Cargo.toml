@@ -1,0 +1,13 @@
+[package]
+name = "aoc-common"
+version = "0.1.0"
+authors = ["Mathieu Lemay <acidrain1@gmail.com>"]
+edition = "2021"
+
+[dependencies]
+itertools = "0.13.0"
+textwrap = "0.16.1"
+tracing-subscriber = "0.3.19"
+
+[dev-dependencies]
+rstest = "0.23.0"
