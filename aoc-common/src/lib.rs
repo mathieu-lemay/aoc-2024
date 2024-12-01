@@ -1,10 +1,12 @@
-use itertools::Itertools;
 use std::fmt::Debug;
 use std::fs::{read_to_string, File};
 use std::io::{BufRead, BufReader};
 use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
+
+use itertools::Itertools;
 use textwrap::dedent;
+use tracing_subscriber::fmt::format::FmtSpan;
 
 pub fn get_input(filename: &str) -> Vec<String> {
     let path = format!("{}/../input/{}", env!("CARGO_MANIFEST_DIR"), filename);
@@ -38,6 +40,14 @@ where
         .iter()
         .map(|i| i.parse().unwrap())
         .collect()
+}
+
+pub fn tracing_init() {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stdout)
+        .with_span_events(FmtSpan::CLOSE)
+        .compact()
+        .init();
 }
 
 pub fn format_duration(nanos: u128) -> String {

@@ -1,9 +1,11 @@
 use std::fmt::Display;
 use std::time::Instant;
 
-use aoc_common::{format_duration, get_input};
+use aoc_common::{format_duration, get_input, tracing_init};
 
 fn main() {
+    tracing_init();
+
     let input = get_input("day19.txt");
 
     let start = Instant::now();
@@ -17,6 +19,7 @@ fn main() {
     println!("Duration: {}", format_duration(t));
 }
 
+#[tracing::instrument(skip_all)]
 fn solve(_input: &[String]) -> (impl Display, impl Display) {
     let p1 = 0;
     let p2 = 0;
@@ -26,9 +29,8 @@ fn solve(_input: &[String]) -> (impl Display, impl Display) {
 
 #[cfg(test)]
 mod tests {
-    use rstest::{fixture, rstest};
-
     use aoc_common::parse_test_input;
+    use rstest::{fixture, rstest};
 
     use super::*;
 
