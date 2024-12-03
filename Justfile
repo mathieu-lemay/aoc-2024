@@ -26,6 +26,7 @@ prepare day='':
     [ -d "input" ] || mkdir input
 
     curl --fail --cookie "session=${SESSION_COOKIE:?Session cookie unavailable}" "https://adventofcode.com/2024/day/$((10#${day}))/input" > "input/${filename}.txt"
+    git co -b "day${day}"
     git add "input/${filename}.txt"
     git ci -m "Day ${day}"
 
