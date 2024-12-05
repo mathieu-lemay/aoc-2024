@@ -12,6 +12,9 @@ test day='':
 expensive-tests day='':
     RUST_BACKTRACE=1 RUST_MIN_STACK=8388608 cargo test --bin "day$(just _day {{ day }})" -- --ignored
 
+lint:
+    pre-commit run -a
+
 watch day='':
     cargo watch -s "cargo test --bin \"day$(just _day {{ day }})\""
 

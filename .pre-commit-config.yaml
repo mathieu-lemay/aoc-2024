@@ -11,4 +11,6 @@ repos:
     rev: v1.0
     hooks:
       - id: fmt
+        entry: cargo +nightly fmt
       - id: clippy
+        args: ["--", "-D", "warnings"]
