@@ -7,7 +7,7 @@ bench day='':
     cargo run --release --bin "day$(just _day {{ day }})"
 
 test day='':
-    RUST_BACKTRACE=1 cargo test --bin "day$(just _day {{ day }})"
+    cargo test --bin "day$(just _day {{ day }})"
 
 expensive-tests day='':
     RUST_BACKTRACE=1 RUST_MIN_STACK=8388608 cargo test --bin "day$(just _day {{ day }})" -- --ignored
