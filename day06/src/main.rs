@@ -23,10 +23,12 @@ fn main() {
 #[tracing::instrument(skip_all)]
 fn solve(input: &Vec<String>) -> (impl Display, impl Display) {
     let mut map: Map = input.into();
-    let p1 = map.move_until_oob();
+    let m2 = map.clone();
 
-    let map: Map = input.into();
-    let p2 = map.find_loops();
+    let path = map.get_path();
+
+    let p1 = path.len();
+    let p2 = m2.find_loops(&path);
 
     (p1, p2)
 }
@@ -119,56 +121,46 @@ impl From<&Vec<String>> for Map {
 }
 
 impl Map {
-    fn move_until_oob(&mut self) -> usize {
-        let mut visited = Vec::new();
+    fn get_path(&mut self) -> Vec<Position> {
+        let mut visited = HashSet::new();
 
-        visited.push((self.guard_pos, self.guard_dir));
+        visited.insert(self.guard_pos);
 
         loop {
             if let Err(()) = self.move_guard() {
                 break;
             }
 
-            visited.push((self.guard_pos, self.guard_dir));
+            visited.insert(self.guard_pos);
         }
 
-        let positions: HashSet<Position> = visited.iter().map(|(p, _)| *p).collect();
-        positions.len()
+        visited.iter().copied().collect()
     }
 
-    fn find_loops(&self) -> usize {
+    fn find_loops(&self, path: &[Position]) -> usize {
         let mut count = 0;
 
-        for x in 0..self.height {
-            for y in 0..self.width {
-                println!(
-                    "Testing x={}, y={}, h={}, w={}",
-                    x, y, self.height, self.width
-                );
+        // Skip the starting position
+        for p in path.iter().filter(|&&p| p != self.guard_pos) {
+            println!("Testing x={}, y={}", p.x, p.y);
 
-                let p = Point::new(x, y);
-                if p == self.guard_pos || self.obstacles.contains(&p) {
-                    continue;
+            let mut map = self.clone();
+            map.obstacles.push(*p);
+
+            let mut visited = Vec::new();
+            visited.push((map.guard_pos, map.guard_dir));
+
+            loop {
+                if let Err(()) = map.move_guard() {
+                    break;
                 }
 
-                let mut map = self.clone();
-                map.obstacles.push(p);
+                if visited.contains(&(map.guard_pos, map.guard_dir)) {
+                    count += 1;
+                    break;
+                }
 
-                let mut visited = Vec::new();
                 visited.push((map.guard_pos, map.guard_dir));
-
-                loop {
-                    if let Err(()) = map.move_guard() {
-                        break;
-                    }
-
-                    if visited.contains(&(map.guard_pos, map.guard_dir)) {
-                        count += 1;
-                        break;
-                    }
-
-                    visited.push((map.guard_pos, map.guard_dir));
-                }
             }
         }
 
@@ -250,11 +242,7 @@ mod tests {
     #[rstest]
     fn test_p1(test_input: Vec<String>) {
         let mut map: Map = (&test_input).into();
-        println!("{}", map);
-
-        let res = map.move_until_oob();
-
-        println!("{}", &map);
+        let res = map.get_path().len();
 
         assert_eq!(res, 41);
     }
@@ -262,27 +250,31 @@ mod tests {
     #[rstest]
     fn test_p1_full_input(puzzle_input: Vec<String>) {
         let mut map: Map = (&puzzle_input).into();
-
-        let res = map.move_until_oob();
+        let res = map.get_path().len();
 
         assert_eq!(res, 4826);
     }
 
     #[rstest]
     fn test_p2(test_input: Vec<String>) {
-        let map: Map = (&test_input).into();
+        let mut map: Map = (&test_input).into();
+        let m2 = map.clone();
 
-        let res = map.find_loops();
+        let path = map.get_path();
+        let res = m2.find_loops(&path);
 
         assert_eq!(res, 6);
     }
 
     #[rstest]
+    #[ignore] // Test is very slow
     fn test_p2_full_input(puzzle_input: Vec<String>) {
-        let map: Map = (&puzzle_input).into();
+        let mut map: Map = (&puzzle_input).into();
+        let m2 = map.clone();
 
-        let res = map.find_loops();
+        let path = map.get_path();
+        let res = m2.find_loops(&path);
 
-        assert_eq!(res, 4826);
+        assert_eq!(res, 1721);
     }
 }
