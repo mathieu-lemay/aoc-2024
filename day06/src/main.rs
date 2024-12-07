@@ -3,6 +3,7 @@ use std::fmt::Display;
 use std::time::Instant;
 
 use aoc_common::{format_duration, get_input, tracing_init, Point};
+use rayon::prelude::*;
 
 fn main() {
     tracing_init();
@@ -138,33 +139,31 @@ impl Map {
     }
 
     fn find_loops(&self, path: &[Position]) -> usize {
-        let mut count = 0;
+        path.into_par_iter()
+            // Skip the starting position
+            .filter(|&&p| p != self.guard_pos)
+            .filter(|&p| {
+                println!("Testing x={}, y={}", p.x, p.y);
 
-        // Skip the starting position
-        for p in path.iter().filter(|&&p| p != self.guard_pos) {
-            println!("Testing x={}, y={}", p.x, p.y);
+                let mut map = self.clone();
+                map.obstacles.push(*p);
 
-            let mut map = self.clone();
-            map.obstacles.push(*p);
-
-            let mut visited = Vec::new();
-            visited.push((map.guard_pos, map.guard_dir));
-
-            loop {
-                if let Err(()) = map.move_guard() {
-                    break;
-                }
-
-                if visited.contains(&(map.guard_pos, map.guard_dir)) {
-                    count += 1;
-                    break;
-                }
-
+                let mut visited = Vec::new();
                 visited.push((map.guard_pos, map.guard_dir));
-            }
-        }
 
-        count
+                loop {
+                    if let Err(()) = map.move_guard() {
+                        return false;
+                    }
+
+                    if visited.contains(&(map.guard_pos, map.guard_dir)) {
+                        return true;
+                    }
+
+                    visited.push((map.guard_pos, map.guard_dir));
+                }
+            })
+            .count()
     }
 
     fn move_guard(&mut self) -> Result<(), ()> {

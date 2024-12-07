@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use aoc_common::{format_duration, get_input, tracing_init};
 use itertools::Itertools;
+use rayon::prelude::*;
 
 fn main() {
     tracing_init();
@@ -55,6 +56,11 @@ impl Equation {
                     .skip(1)
                     .enumerate()
                     .fold(self.values[0], |acc, (idx, v)| {
+                        // If we're already over the target, just carry the acc.
+                        if acc > self.target {
+                            return acc;
+                        }
+
                         if ops & (1 << idx) != 0 {
                             acc * v
                         } else {
@@ -78,6 +84,11 @@ impl Equation {
                     .skip(1)
                     .enumerate()
                     .fold(self.values[0], |acc, (idx, v)| {
+                        // If we're already over the target, just carry the acc.
+                        if acc > self.target {
+                            return acc;
+                        }
+
                         match (ops / 3u64.pow(idx as u32)) % 3 {
                             0 => acc + v,
                             1 => acc * v,
@@ -137,7 +148,7 @@ fn parse_equations(input: &[String]) -> Vec<Equation> {
 
 #[tracing::instrument(skip_all)]
 fn get_total_calibration_result(eqs: &[Equation]) -> u64 {
-    eqs.iter()
+    eqs.into_par_iter()
         .filter(|e| e.is_solvable())
         .map(|e| e.target)
         .sum()
@@ -145,7 +156,7 @@ fn get_total_calibration_result(eqs: &[Equation]) -> u64 {
 
 #[tracing::instrument(skip_all)]
 fn get_total_calibration_result_with_concat(eqs: &[Equation]) -> u64 {
-    eqs.iter()
+    eqs.into_par_iter()
         .filter(|e| e.is_solvable_with_concat())
         .map(|e| e.target)
         .sum()
