@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fmt::Display;
 use std::time::Instant;
 
@@ -33,16 +34,10 @@ fn solve(input: &str) -> (impl Display, impl Display) {
     (p1, p2)
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 enum BlockType {
     Empty,
-    File { id: u32 },
-}
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-struct Block {
-    type_: BlockType,
-    size: u8,
+    File(u32),
 }
 
 struct Disk {
@@ -57,15 +52,13 @@ impl From<&str> for Disk {
             let size = c.to_digit(10).unwrap();
 
             let b = if idx % 2 == 0 {
-                BlockType::File {
-                    id: (idx / 2) as u32,
-                }
+                BlockType::File((idx / 2) as u32)
             } else {
                 BlockType::Empty
             };
 
             for _ in 0..size {
-                blocks.push(b);
+                blocks.push(b.clone());
             }
         }
 
@@ -74,6 +67,7 @@ impl From<&str> for Disk {
 }
 
 impl Disk {
+    #[tracing::instrument(skip_all)]
     fn optimize(&mut self) {
         let mut a = 0;
         let mut b = self.blocks.len() - 1;
@@ -91,7 +85,7 @@ impl Disk {
                 break;
             }
 
-            (self.blocks[a], self.blocks[b]) = (self.blocks[b], self.blocks[a]);
+            self.blocks.swap(a, b);
         }
     }
 
@@ -100,7 +94,7 @@ impl Disk {
             .iter()
             .enumerate()
             .map(|(idx, b)| {
-                if let BlockType::File { id } = b {
+                if let BlockType::File(id) = b {
                     idx * (*id as usize)
                 } else {
                     0
@@ -110,26 +104,36 @@ impl Disk {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct Block {
+    type_: BlockType,
+    size: u8,
+    pos: usize,
+}
+
 struct UnfragmentedDisk {
     blocks: Vec<Block>,
 }
 
 impl From<&str> for UnfragmentedDisk {
     fn from(value: &str) -> Self {
+        let mut pos = 0;
+
         let blocks = value
             .chars()
             .enumerate()
             .map(|(idx, c)| {
                 let size = c.to_digit(10).unwrap() as u8;
                 let type_ = if idx % 2 == 0 {
-                    BlockType::File {
-                        id: (idx / 2) as u32,
-                    }
+                    BlockType::File((idx / 2) as u32)
                 } else {
                     BlockType::Empty
                 };
 
-                Block { type_, size }
+                let b = Block { type_, size, pos };
+                pos += size as usize;
+
+                b
             })
             .collect::<Vec<Block>>();
 
@@ -138,63 +142,69 @@ impl From<&str> for UnfragmentedDisk {
 }
 
 impl UnfragmentedDisk {
+    #[tracing::instrument(skip_all)]
     fn optimized(&self) -> Self {
-        let mut blocks: Vec<Block> = self.blocks.iter().rev().cloned().collect::<Vec<Block>>();
+        let mut files = self
+            .blocks
+            .iter()
+            .filter(|b| matches!(b.type_, BlockType::File(_)))
+            .collect::<VecDeque<&Block>>();
+        let mut empties = self
+            .blocks
+            .iter()
+            .filter(|b| b.type_ == BlockType::Empty)
+            .collect::<VecDeque<&Block>>();
 
-        let mut i = 0;
+        let mut blocks = Vec::new();
 
-        while i < blocks.len() {
-            let src = blocks[i];
-            if src.type_ == BlockType::Empty {
-                i += 1;
-                continue;
+        while !(empties.is_empty()) {
+            let e = empties.pop_front().unwrap();
+            let mut free = e.size;
+            let mut pos = e.pos;
+
+            if let Some(f) = files.front() {
+                if f.pos < pos {
+                    let f = files.pop_front().unwrap();
+                    blocks.push(f.clone());
+                }
             }
 
-            for j in (i..(blocks.len() - 1)).rev() {
-                let tgt = blocks[j];
-                if tgt.type_ != BlockType::Empty || src.size > tgt.size {
-                    continue;
+            while free > 0 {
+                if let Some((idx, &b)) = files
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .find(|(_, b)| b.pos > pos && b.size <= free)
+                {
+                    let mut b = b.clone();
+                    b.pos = pos;
+                    pos += b.size as usize;
+                    free -= b.size;
+                    blocks.push(b);
+
+                    files.remove(idx);
+                } else {
+                    break;
                 }
-
-                blocks[i] = Block {
-                    type_: BlockType::Empty,
-                    size: src.size,
-                };
-                blocks[j] = src;
-
-                let remainder = tgt.size - src.size;
-                if remainder > 0 {
-                    blocks.insert(
-                        j,
-                        Block {
-                            type_: BlockType::Empty,
-                            size: remainder,
-                        },
-                    )
-                }
-
-                break;
             }
-
-            i += 1;
         }
 
-        Self {
-            blocks: blocks.iter().rev().cloned().collect(),
+        for f in files {
+            blocks.push(f.clone());
         }
+
+        Self { blocks }
     }
 
     fn checksum(&self) -> usize {
         let mut sum = 0;
-        let mut idx: usize = 0;
 
         for b in &self.blocks {
-            if let BlockType::File { id } = b.type_ {
+            if let BlockType::File(id) = b.type_ {
                 for i in 0..(b.size as usize) {
-                    sum += (idx + i) * (id as usize);
+                    sum += (b.pos + i) * (id as usize);
                 }
             }
-            idx += b.size as usize;
         }
 
         sum
