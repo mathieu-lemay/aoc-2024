@@ -1,10 +1,9 @@
+use core::f32;
 use std::cmp::Ordering;
 use std::fmt::Display;
 use std::time::Instant;
 
 use aoc_common::{format_duration, get_input, tracing_init, Point};
-use draw::{render, Canvas, Color, Drawing, Style, SvgRenderer};
-use itertools::Itertools;
 use regex::Regex;
 
 fn main() {
@@ -28,81 +27,85 @@ fn solve(input: &[String]) -> (impl Display, impl Display) {
     let mut map = parse_map(input, 101, 103);
 
     let p1 = get_factor_after_ticks(map.clone(), 100);
-    render_possibilities(&mut map, 10000);
+    let p2 = get_tick_least_deviation(&mut map);
 
-    (p1, 0)
+    (p1, p2)
 }
 
 #[tracing::instrument(skip_all)]
-fn get_factor_after_ticks(mut map: Map, ticks: u32) -> u32 {
+fn get_factor_after_ticks(mut map: Map, ticks: i32) -> u32 {
     map.tick(ticks);
     map.get_safety_factor()
 }
 
 #[tracing::instrument(skip_all)]
-fn render_possibilities(map: &mut Map, max_ticks: u32) {
-    let mut nb_renders = 0;
+fn get_tick_least_deviation(map: &mut Map) -> i32 {
+    let mut min_deviation: f32 = f32::MAX;
+    let mut tick = 0;
+
+    let max_ticks = map.width * map.height;
 
     for t in 0..max_ticks {
         map.tick(1);
 
-        let mut keep = false;
-        let line_length: u8 = 10;
-        for x in 0..map.width {
-            let ys = map
-                .robots
-                .iter()
-                .filter(|r| r.position.x == x)
-                .map(|r| r.position.y)
-                .sorted()
-                .unique()
-                .collect_vec();
-            if ys
-                .windows(line_length as usize + 1)
-                .any(|w| w[line_length as usize] - w[0] == line_length)
-            {
-                keep = true;
-                break;
+        let positions: Vec<f32> = map.robots.iter().map(Robot::dist).collect();
+
+        if let Some(dev) = std_deviation(&positions) {
+            if dev < min_deviation {
+                min_deviation = dev;
+                tick = t + 1;
             }
         }
-
-        if !keep {
-            continue;
-        }
-
-        nb_renders += 1;
-
-        map.render(t + 1);
     }
 
-    println!("Rendered {} possibilities, have fun.", nb_renders);
+    tick
 }
 
-type Position = Point<u8>;
-type Velocity = Point<i8>;
+fn mean(data: &[f32]) -> Option<f32> {
+    let sum = data.iter().sum::<f32>();
+    let count = data.len();
+
+    match count {
+        positive if positive > 0 => Some(sum / count as f32),
+        _ => None,
+    }
+}
+
+fn std_deviation(data: &[f32]) -> Option<f32> {
+    match (mean(data), data.len()) {
+        (Some(data_mean), count) if count > 0 => {
+            let variance = data
+                .iter()
+                .map(|value| {
+                    let diff = data_mean - (*value);
+
+                    diff * diff
+                })
+                .sum::<f32>()
+                / count as f32;
+
+            Some(variance.sqrt())
+        }
+        _ => None,
+    }
+}
+
+type Position = Point<i32>;
+type Velocity = Point<i32>;
 
 #[derive(Clone)]
 struct Map {
-    width: u8,
-    height: u8,
+    width: i32,
+    height: i32,
 
     robots: Vec<Robot>,
 }
 
 impl Map {
-    fn tick(&mut self, n: u32) {
+    fn tick(&mut self, n: i32) {
         for r in self.robots.iter_mut() {
-            let mut x = (r.position.x as i32 + r.velocity.x as i32 * n as i32) % self.width as i32;
-            if x < 0 {
-                x += self.width as i32;
-            }
-            let mut y = (r.position.y as i32 + r.velocity.y as i32 * n as i32) % self.height as i32;
-            if y < 0 {
-                y += self.height as i32;
-            }
-
-            r.position.x = x as u8;
-            r.position.y = y as u8;
+            r.position.x = (r.position.x + r.velocity.x * n).rem_euclid(self.width);
+            r.position.y = (r.position.y + r.velocity.y * n).rem_euclid(self.height);
         }
     }
 
@@ -126,38 +129,6 @@ impl Map {
         }
 
         a * b * c * d
-    }
-
-    fn render(&self, tick: u32) {
-        // create a canvas to draw on
-        let mut canvas = Canvas::new(self.width as u32, self.height as u32);
-        canvas.display_list.add(
-            Drawing::new()
-                .with_shape(draw::Shape::Rectangle {
-                    width: canvas.width,
-                    height: canvas.height,
-                })
-                .with_style(Style::filled(Color::gray(255))),
-        );
-
-        for r in &self.robots {
-            let d = Drawing::new()
-                .with_shape(draw::Shape::Rectangle {
-                    width: 1,
-                    height: 1,
-                })
-                .with_xy(r.position.x as f32, r.position.y as f32)
-                .with_style(Style::filled(Color::black()));
-            canvas.display_list.add(d);
-        }
-
-        // save the canvas as an svg
-        render::save(
-            &canvas,
-            &format!("day14/output/{:05}.svg", tick),
-            SvgRenderer::new(),
-        )
-        .expect("Failed to save");
     }
 }
 
@@ -190,8 +161,14 @@ struct Robot {
     velocity: Velocity,
 }
 
+impl Robot {
+    fn dist(&self) -> f32 {
+        ((self.position.x.pow(2) + self.position.y.pow(2)) as f32).sqrt()
+    }
+}
+
 #[tracing::instrument(skip_all)]
-fn parse_map(input: &[String], width: u8, height: u8) -> Map {
+fn parse_map(input: &[String], width: i32, height: i32) -> Map {
     let re = Regex::new(r"p=(\d+),(\d+) v=(-?\d+),(-?\d+)").expect("Invalid regex");
 
     let robots = input
@@ -200,10 +177,10 @@ fn parse_map(input: &[String], width: u8, height: u8) -> Map {
             let m = re
                 .captures(i)
                 .unwrap_or_else(|| panic!("Unable to parse {}", i));
-            let px = m.get(1).unwrap().as_str().parse::<u8>().unwrap();
-            let py = m.get(2).unwrap().as_str().parse::<u8>().unwrap();
-            let vx = m.get(3).unwrap().as_str().parse::<i8>().unwrap();
-            let vy = m.get(4).unwrap().as_str().parse::<i8>().unwrap();
+            let px = m.get(1).unwrap().as_str().parse().unwrap();
+            let py = m.get(2).unwrap().as_str().parse().unwrap();
+            let vx = m.get(3).unwrap().as_str().parse().unwrap();
+            let vy = m.get(4).unwrap().as_str().parse().unwrap();
 
             Robot {
                 position: Position::new(px, py),
@@ -269,5 +246,14 @@ mod tests {
         let res = map.get_safety_factor();
 
         assert_eq!(res, 211773366);
+    }
+
+    #[rstest]
+    fn test_p2_full_input(puzzle_input: Vec<String>) {
+        let mut map = parse_map(&puzzle_input, 101, 103);
+
+        let res = get_tick_least_deviation(&mut map);
+
+        assert_eq!(res, 7344);
     }
 }
