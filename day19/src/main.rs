@@ -3,6 +3,7 @@ use std::fmt::Display;
 use std::time::Instant;
 
 use aoc_common::{format_duration, get_input, tracing_init};
+use tracing::debug;
 
 fn main() {
     tracing_init();
@@ -24,10 +25,7 @@ fn main() {
 fn solve(input: &[String]) -> (impl Display, impl Display) {
     let puzzle = parse_puzzle(input);
 
-    let p1 = puzzle.count_possible_designs();
-    let p2 = 0;
-
-    (p1, p2)
+    puzzle.count_possible_builds()
 }
 
 #[tracing::instrument(skip_all)]
@@ -45,13 +43,34 @@ struct Puzzle {
 
 impl Puzzle {
     #[tracing::instrument(skip_all)]
-    fn count_possible_designs(&self) -> usize {
-        self.designs.iter().filter(|d| self.can_build(d)).count()
+    fn count_possible_builds(&self) -> (usize, usize) {
+        self.designs
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, d)| {
+                debug!(
+                    "Checking design {} ({} of {})",
+                    d,
+                    idx + 1,
+                    self.designs.len()
+                );
+
+                let n = self.count_builds_for_design(d);
+                if n > 0 {
+                    Some(n)
+                } else {
+                    None
+                }
+            })
+            .fold((0, 0), |(n, t), c| (n + 1, t + c))
     }
 
-    fn can_build(&self, design: &str) -> bool {
+    fn count_builds_for_design(&self, design: &str) -> usize {
+        let mut count = 0;
+        debug!("Testing for design: {}", design);
+
         let mut candidates = VecDeque::new();
-        candidates.push_back(String::new());
+        candidates.push_back((String::new(), 1));
 
         let useful_patterns: Vec<&str> = self
             .patterns
@@ -66,21 +85,30 @@ impl Puzzle {
             .collect();
 
         while !candidates.is_empty() {
-            let c = candidates.pop_front().unwrap();
+            let (c, n) = candidates.pop_front().unwrap();
 
             for p in &useful_patterns {
                 let d = format!("{}{}", c, p);
                 if d == design {
-                    return true;
-                }
-
-                if design.starts_with(&d) && !candidates.contains(&d) {
-                    candidates.push_back(d);
+                    count += n;
+                } else if design.starts_with(&d) {
+                    if let Some(idx) = candidates.iter().position(|(c, _)| c == &d) {
+                        let (d, n2) = candidates.remove(idx).unwrap();
+                        candidates.push_back((d, n2 + n))
+                    } else {
+                        candidates.push_back((d, n));
+                    }
                 }
             }
         }
 
-        false
+        if count > 0 {
+            debug!("{} can be made in {} ways\n", design, count);
+        } else {
+            debug!("{} can't be made\n", design);
+        }
+
+        count
     }
 }
 
@@ -117,31 +145,53 @@ mod tests {
     #[rstest]
     fn test_p1(test_input: Vec<String>) {
         let puzzle = parse_puzzle(&test_input);
-        let res = puzzle.count_possible_designs();
+        let (res, _) = puzzle.count_possible_builds();
 
         assert_eq!(res, 6);
     }
 
     #[rstest]
-    #[ignore]
-    fn test_p1_full_input(puzzle_input: Vec<String>) {
-        let puzzle = parse_puzzle(&puzzle_input);
-        let res = puzzle.count_possible_designs();
-
-        assert_eq!(res, 290);
-    }
-
-    #[rstest]
     fn test_p2(test_input: Vec<String>) {
-        let res = 0;
+        let puzzle = parse_puzzle(&test_input);
+        let (_, res) = puzzle.count_possible_builds();
 
-        assert_eq!(res, 1);
+        assert_eq!(res, 16);
     }
 
     #[rstest]
-    fn test_p2_full_input(puzzle_input: Vec<String>) {
-        let res = 0;
+    #[ignore]
+    fn test_full_input(puzzle_input: Vec<String>) {
+        let puzzle = parse_puzzle(&puzzle_input);
+        let (p1, p2) = puzzle.count_possible_builds();
 
-        assert_eq!(res, 1);
+        assert_eq!(p1, 290);
+        assert_eq!(p2, 712058625427487);
+    }
+
+    #[rstest]
+    #[case("brwrr", 2)]
+    #[case("bggr", 1)]
+    #[case("gbbr", 4)]
+    #[case("rrbgbr", 6)]
+    #[case("bwurrg", 1)]
+    #[case("brgr", 2)]
+    #[case("ubwu", 0)]
+    #[case("bbrgwb", 0)]
+    fn test_count_possibilities(#[case] design: &'static str, #[case] count: usize) {
+        let puzzle = Puzzle {
+            patterns: vec![
+                "r".to_string(),
+                "wr".to_string(),
+                "b".to_string(),
+                "g".to_string(),
+                "bwu".to_string(),
+                "rb".to_string(),
+                "gb".to_string(),
+                "br".to_string(),
+            ],
+            designs: Vec::new(),
+        };
+
+        assert_eq!(puzzle.count_builds_for_design(design), count);
     }
 }
