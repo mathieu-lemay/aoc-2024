@@ -6,7 +6,9 @@ use std::str::FromStr;
 
 use itertools::Itertools;
 use textwrap::dedent;
+use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::EnvFilter;
 
 pub fn get_input(filename: &str) -> Vec<String> {
     let path = format!("{}/../input/{}", env!("CARGO_MANIFEST_DIR"), filename);
@@ -43,9 +45,14 @@ where
 }
 
 pub fn tracing_init() {
+    let env_filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env_lossy();
+
     tracing_subscriber::fmt()
         .with_writer(std::io::stdout)
         .with_span_events(FmtSpan::CLOSE)
+        .with_env_filter(env_filter)
         .compact()
         .init();
 }
