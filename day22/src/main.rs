@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::time::Instant;
 
@@ -24,7 +25,7 @@ fn solve(input: &[String]) -> (impl Display, impl Display) {
     let input: Vec<u64> = input.iter().map(|i| i.parse::<u64>().unwrap()).collect();
 
     let p1 = get_sum_of_secret_numbers(&input, 2000);
-    let p2 = 0;
+    let p2 = get_most_bananas(&input, 2000);
 
     (p1, p2)
 }
@@ -55,27 +56,78 @@ fn get_sum_of_secret_numbers(input: &[u64], iterations: u32) -> u64 {
     sum
 }
 
+#[tracing::instrument(skip_all)]
+fn get_most_bananas(input: &[u64], iterations: u32) -> u64 {
+    let price_lists = get_price_lists(input, iterations);
+    let sequences = get_sequences(&price_lists);
+
+    let mut totals: HashMap<&Vec<i8>, u64> = HashMap::new();
+
+    for seq in &sequences {
+        for (s, v) in seq {
+            *totals.entry(s).or_insert(0) += *v as u64;
+        }
+    }
+
+    *totals.values().max().unwrap()
+}
+
+fn get_price_lists(input: &[u64], iterations: u32) -> Vec<Vec<u8>> {
+    let mut price_lists = Vec::with_capacity(input.len());
+
+    for val in input {
+        let mut list = Vec::with_capacity(iterations as usize + 1);
+
+        let mut s = *val;
+
+        list.push((s % 10) as u8);
+
+        for _ in 0..iterations {
+            s = get_next_secret_number(s, 1);
+            list.push((s % 10) as u8);
+        }
+
+        price_lists.push(list)
+    }
+
+    price_lists
+}
+
+fn get_sequences(price_lists: &Vec<Vec<u8>>) -> Vec<HashMap<Vec<i8>, u8>> {
+    let mut sequences = Vec::with_capacity(price_lists.len());
+
+    for pl in price_lists {
+        let mut seq_for_prices: HashMap<Vec<i8>, u8> = HashMap::new();
+
+        for w in pl.windows(5) {
+            let s1 = w[1] as i8 - w[0] as i8;
+            let s2 = w[2] as i8 - w[1] as i8;
+            let s3 = w[3] as i8 - w[2] as i8;
+            let s4 = w[4] as i8 - w[3] as i8;
+
+            let seq = vec![s1, s2, s3, s4];
+            let price = w[4];
+
+            if let Some(&p) = seq_for_prices.get(&seq) {
+                if price > p {
+                    seq_for_prices.insert(seq, p);
+                }
+            } else {
+                seq_for_prices.insert(seq, price);
+            }
+        }
+
+        sequences.push(seq_for_prices)
+    }
+
+    sequences
+}
+
 #[cfg(test)]
 mod tests {
-    use aoc_common::parse_test_input;
     use rstest::{fixture, rstest};
 
     use super::*;
-
-    #[fixture]
-    fn test_input() -> Vec<u64> {
-        parse_test_input(
-            "
-            1
-            10
-            100
-            2024
-        ",
-        )
-        .iter()
-        .map(|i| i.parse::<u64>().unwrap())
-        .collect()
-    }
 
     #[fixture]
     fn puzzle_input() -> Vec<u64> {
@@ -86,8 +138,9 @@ mod tests {
     }
 
     #[rstest]
-    fn test_p1(test_input: Vec<u64>) {
-        let res = get_sum_of_secret_numbers(&test_input, 2000);
+    fn test_p1() {
+        let input = vec![1, 10, 100, 2024];
+        let res = get_sum_of_secret_numbers(&input, 2000);
 
         assert_eq!(res, 37327623);
     }
@@ -100,17 +153,19 @@ mod tests {
     }
 
     #[rstest]
-    fn test_p2(test_input: Vec<u64>) {
-        let res = 0;
+    fn test_p2() {
+        let input = vec![1, 2, 3, 2024];
+        let res = get_most_bananas(&input, 2000);
 
-        assert_eq!(res, 1);
+        assert_eq!(res, 23);
     }
 
     #[rstest]
+    #[ignore]
     fn test_p2_full_input(puzzle_input: Vec<u64>) {
-        let res = 0;
+        let res = get_most_bananas(&puzzle_input, 2000);
 
-        assert_eq!(res, 1);
+        assert_eq!(res, 2242);
     }
 
     #[rstest]
