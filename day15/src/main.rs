@@ -159,6 +159,36 @@ impl Map {
             };
         }
     }
+
+    fn widen(&self) -> WideMap {
+        let mut tiles = Vec::with_capacity(self.tiles.len() * 2);
+        for l in self.tiles.iter() {
+            let mut row = Vec::with_capacity(l.len() * 2);
+
+            for t in l {
+                match t {
+                    Tile::Wall => {
+                        row.push(WideTile::Wall);
+                        row.push(WideTile::Wall);
+                    }
+                    Tile::Box => {
+                        row.push(WideTile::BoxL);
+                        row.push(WideTile::BoxR);
+                    }
+                    Tile::Empty => {
+                        row.push(WideTile::Empty);
+                        row.push(WideTile::Empty);
+                    }
+                }
+            }
+
+            tiles.push(row);
+        }
+
+        let robot = Position::new(self.robot.x * 2, self.robot.y);
+
+        WideMap { tiles, robot }
+    }
 }
 
 impl Display for Map {
@@ -195,6 +225,127 @@ impl Tile {
             Tile::Box => 'O',
             Tile::Wall => '#',
             Tile::Empty => ' ',
+        }
+    }
+}
+
+struct WideMap {
+    tiles: Vec<Vec<WideTile>>,
+    robot: Position,
+}
+
+impl WideMap {
+    #[tracing::instrument(skip_all)]
+    fn run(&mut self, instrs: &[Direction]) {
+        println!("{}", self);
+
+        // for d in instrs {
+        //     let dst = match d {
+        //         Direction::Up => Point::new(self.robot.x, self.robot.y - 1),
+        //         Direction::Down => Point::new(self.robot.x, self.robot.y + 1),
+        //         Direction::Left => Point::new(self.robot.x - 1, self.robot.y),
+        //         Direction::Right => Point::new(self.robot.x + 1, self.robot.y),
+        //     };
+        //
+        //     if self.tiles[dst.y][dst.x] == Tile::Empty {
+        //         self.robot.x = dst.x;
+        //         self.robot.y = dst.y;
+        //     } else if let Some(e) = self.find_next_empty(d) {
+        //         self.robot.x = dst.x;
+        //         self.robot.y = dst.y;
+        //
+        //         self.tiles[dst.y][dst.x] = Tile::Empty;
+        //         self.tiles[e.y][e.x] = Tile::Box;
+        //     }
+        //
+        //     // println!("Move: {:?}", d);
+        //     // println!("{}\n", self);
+        // }
+    }
+
+    fn sum_gps_coords(&self) -> usize {
+        0
+        // self.tiles
+        //     .iter()
+        //     .enumerate()
+        //     .map(|(y, r)| {
+        //         r.iter()
+        //             .enumerate()
+        //             .filter_map(|(x, t)| {
+        //                 if let Tile::Box = t {
+        //                     Some(x + 100 * y)
+        //                 } else {
+        //                     None
+        //                 }
+        //             })
+        //             .sum::<usize>()
+        //     })
+        //     .sum()
+    }
+
+    fn find_next_empty(&self, dir: &Direction) -> Option<Position> {
+        None
+        // let mut p = self.robot;
+        //
+        // loop {
+        //     match dir {
+        //         Direction::Up => p.y -= 1,
+        //         Direction::Down => p.y += 1,
+        //         Direction::Left => p.x -= 1,
+        //         Direction::Right => p.x += 1,
+        //     };
+        //
+        //     match self.tiles[p.y][p.x] {
+        //         Tile::Box => {
+        //             continue;
+        //         }
+        //         Tile::Wall => {
+        //             return None;
+        //         }
+        //         Tile::Empty => {
+        //             return Some(p);
+        //         }
+        //     };
+        // }
+    }
+}
+
+impl Display for WideMap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (y, row) in self.tiles.iter().enumerate() {
+            let s = row
+                .iter()
+                .enumerate()
+                .map(|(x, t)| {
+                    if x == self.robot.x && y == self.robot.y {
+                        '@'
+                    } else {
+                        t.as_char()
+                    }
+                })
+                .collect::<String>();
+            writeln!(f, "{}", s)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum WideTile {
+    BoxL,
+    BoxR,
+    Wall,
+    Empty,
+}
+
+impl WideTile {
+    fn as_char(&self) -> char {
+        match self {
+            WideTile::BoxL => '[',
+            WideTile::BoxR => ']',
+            WideTile::Wall => '#',
+            WideTile::Empty => ' ',
         }
     }
 }
